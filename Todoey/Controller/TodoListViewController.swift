@@ -7,15 +7,21 @@
 //
 
 import UIKit
-
+import CoreData
 class TodoListViewController: UITableViewController{
-    var defaults = UserDefaults.standard
     var itemArray:[Item] = []
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    var selectedCategory:Category?{
+        didSet{
+           let predicate = NSPredicate(format: "parentCategory.name MATCHES %@", self.selectedCategory!.name!)
+            loadItems(predicate: predicate)
+       
+        }
+    }
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        loadItems()
+        
     }
     
     //MARK:-TableView DataSource Methods
@@ -32,12 +38,13 @@ class TodoListViewController: UITableViewController{
         return cell
         
     }
-     
+    
     //MARK:-TableView Delegate Methods
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-      
+//        context.delete(itemArray[indexPath.row])
+//        itemArray.remove(at: indexPath.row)
         itemArray[indexPath.row].isDone = !itemArray[indexPath.row].isDone
-        updatePlist()
+        updateItems()
         tableView.deselectRow(at: indexPath, animated: true)
         
     }
@@ -50,9 +57,12 @@ class TodoListViewController: UITableViewController{
         let action = UIAlertAction(title: "Add", style: .default) { (action) in
             if let text = textField?.text{
                 if !text.isEmpty{
-                    let newItem = Item(title: text, isDone: false)
+                    let newItem = Item(context:self.context)
+                    newItem.title = text
+                    newItem.isDone = false
+                    newItem.parentCategory = self.selectedCategory
                     self.itemArray.append(newItem)
-                    self.updatePlist()
+                    self.updateItems()
                     
                 }
             }
@@ -65,29 +75,55 @@ class TodoListViewController: UITableViewController{
         alert.addAction(action)
         present(alert, animated: true)
     }
-
-//MARK:-Model manipulation Methods
     
-    func updatePlist(){
-        let encoder = PropertyListEncoder()
+    //MARK:-Model manipulation Methods
+    
+    func updateItems(){
         do{
-            let data = try encoder.encode(itemArray)
-            try data.write(to:dataFilePath!)
+            try context.save()
         }catch{
             print("Got some errors: \(error)")
         }
         self.tableView.reloadData()
     }
     
-    func loadItems(){
-        if let data = try? Data(contentsOf: dataFilePath!){
-            let decoder = PropertyListDecoder()
-            do{
-                itemArray = try decoder.decode([Item].self, from: data)
-            }catch{
-                print("Got some errors: \(error)")
+    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate){
+        request.predicate = predicate
+
+        do{
+            self.itemArray = try context.fetch(request)
+        }catch{
+            print("Got some errors: \(error)")
+        }
+        self.tableView.reloadData()
+    }
+}
+
+//MARK:-SearchbarDelegate Methods
+
+extension TodoListViewController:UISearchBarDelegate{
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        if let searchText = searchBar.text{
+            let request:NSFetchRequest<Item> = Item.fetchRequest()
+            let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchText)
+            request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+            loadItems(with: request, predicate: predicate)
+        }
+        
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if(searchText.isEmpty){
+            let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchText)
+            loadItems(predicate: predicate)
+            DispatchQueue.main.async {
+                searchBar.endEditing(true)
             }
+            
         }
     }
 }
+
+
 

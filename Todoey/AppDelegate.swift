@@ -1,6 +1,6 @@
 //
 //  AppDelegate.swift
-//  CoreData
+//  fg
 //
 //  Created by Шапагат on 2/10/20.
 //  Copyright © 2020 Shapagat Bolat. All rights reserved.
